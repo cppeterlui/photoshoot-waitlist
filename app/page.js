@@ -1,113 +1,91 @@
 'use client';
-import { useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-import { Camera, UserPlus, CheckCircle } from 'lucide-react';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
+  const router = useRouter();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [partySize, setPartySize] = useState('1');
-  const [joined, setJoined] = useState(null);
+  const [groupSize, setGroupSize] = useState('1');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleJoin = async (e) => {
     e.preventDefault();
-    if (!name) return;
-    const ticket = {
-      id: "T-" + Math.floor(1000 + Math.random() * 9000),
-      name,
-      phone,
-      partySize,
-      joinedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: 'waiting'
-    };
-    setJoined(ticket);
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'JOIN', name, phone, groupSize }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem('userTicketId', data.item.id);
+        router.push(`/status?id=${data.item.id}`);
+      } else {
+        alert(data.error || 'Failed to join waitlist');
+      }
+    } catch (err) {
+      alert('Failed to join waitlist');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com';
-
   return (
-    <main className="max-w-md mx-auto p-4 min-h-screen flex flex-col justify-center">
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-100">
-        <div className="flex items-center justify-center space-x-2 mb-6">
-          <Camera className="w-8 h-8 text-indigo-600" />
-          <h1 className="text-2xl font-bold text-slate-800">PhotoBooth Lineup</h1>
-        </div>
-
-        {!joined ? (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Your Name</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Alex Wong"
-                className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number (for SMS notification)</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1 403 555 0199"
-                className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Party Size</label>
-              <select
-                value={partySize}
-                onChange={(e) => setPartySize(e.target.value)}
-                className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                  <option key={num} value={num}>{num} {num === 1 ? 'person' : 'people'}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition shadow-md flex items-center justify-center space-x-2"
-            >
-              <UserPlus className="w-5 h-5" />
-              <span>Join Waitlist</span>
-            </button>
-          </form>
-        ) : (
-          <div className="text-center space-y-4">
-            <div className="inline-flex p-3 bg-green-100 rounded-full text-green-600 mb-2">
-              <CheckCircle className="w-8 h-8" />
-            </div>
-            <h2 className="text-xl font-bold text-slate-800">You're in Line!</h2>
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <p className="text-xs text-slate-500 uppercase tracking-wider">Ticket Code</p>
-              <p className="text-3xl font-extrabold text-indigo-600">{joined.id}</p>
-              <p className="text-sm font-medium text-slate-700 mt-1">{joined.name} ({joined.partySize} guests)</p>
-            </div>
-            <p className="text-sm text-slate-600">
-              Check the Live Status board or wait for your call notification!
-            </p>
-            <div className="pt-2">
-              <a
-                href="/status"
-                className="inline-block px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-sm"
-              >
-                View Live Queue
-              </a>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Scan QR Code to Share</p>
-          <div className="flex justify-center p-3 bg-white rounded-xl shadow-inner border border-slate-100 inline-block">
-            <QRCodeSVG value={appUrl} size={130} />
-          </div>
-        </div>
+    <div className="max-w-lg mx-auto space-y-8 py-4">
+      <div className="text-center space-y-2">
+        <h2 className="text-3xl font-extrabold text-slate-50">Join Photoshoot Queue</h2>
+        <p className="text-slate-400 text-sm">Enter your details below to hold your spot in line.</p>
       </div>
-    </main>
+
+      <form onSubmit={handleJoin} className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">Your Name</label>
+          <input
+            type="text"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Alex Wong"
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number (Optional)</label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="For turn notification"
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">Group Size</label>
+          <select
+            value={groupSize}
+            onChange={(e) => setGroupSize(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          >
+            {[1, 2, 3, 4, 5, 6, '7+'].map((num) => (
+              <option key={num} value={num}>{num} {num === 1 ? 'person' : 'people'}</option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full mt-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition duration-200"
+        >
+          {loading ? 'Joining...' : 'Get Ticket & Line Up'}
+        </button>
+      </form>
+    </div>
   );
 }
