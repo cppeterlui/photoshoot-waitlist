@@ -1,113 +1,131 @@
 'use client';
-import { useState } from 'react';
-import { Play, Bell, UserCheck, X } from 'lucide-react';
 
-export default function AdminDashboard() {
-  const [queue, setQueue] = useState([
-    { id: 'T-1001', name: 'Samantha L.', phone: '403-555-0100', partySize: 2, status: 'in-session' },
-    { id: 'T-1002', name: 'Alex Wong', phone: '403-555-0199', partySize: 1, status: 'waiting' },
-    { id: 'T-1003', name: 'David & Family', phone: '403-555-0211', partySize: 4, status: 'waiting' },
-  ]);
+import { useState, useEffect } from 'react';
 
-  const callNext = () => {
-    const nextItem = queue.find(q => q.status === 'waiting');
-    if (!nextItem) return;
+export default function AdminPage() {
+  const [waitlist, setWaitlist] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-    setQueue(queue.map(item => {
-      if (item.status === 'in-session') return { ...item, status: 'completed' };
-      if (item.id === nextItem.id) return { ...item, status: 'in-session' };
-      return item;
-    }));
+  const fetchWaitlist = async () => {
+    try {
+      // Force direct fresh fetch from Supabase route without cache
+      const res = await fetch('/api/waitlist', { cache: 'no-store' });
+      const data = await res.json();
+      setWaitlist(data.waitlist || []);
+    } catch (e) {
+      console.error('Failed to fetch waitlist:', e);
+    }
   };
 
-  const markCompleted = (id) => {
-    setQueue(queue.map(item => item.id === id ? { ...item, status: 'completed' } : item));
+  useEffect(() => {
+    fetchWaitlist();
+    const interval = setInterval(fetchWaitlist, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCallNext = async () => {
+    setLoading(true);
+    try {
+      await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'CALL_NEXT' }),
+      });
+      await fetchWaitlist();
+    } catch (e) {
+      alert('Failed to call next customer');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const removeGuest = (id) => {
-    setQueue(queue.filter(item => item.id !== id));
+  const handleCancel = async (id) => {
+    if (!confirm('Remove this customer from queue?')) return;
+    try {
+      await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'CANCEL', id }),
+      });
+      await fetchWaitlist();
+    } catch (e) {
+      alert('Failed to remove customer');
+    }
   };
 
-  const currentGuest = queue.find(q => q.status === 'in-session');
+  const activeCustomer = waitlist.find((item) => item.status === 'in-service');
+  const waitingList = waitlist.filter((item) => item.status === 'waiting');
 
   return (
-    <main className="max-w-4xl mx-auto p-6 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-8 py-4">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-800">Studio Admin Dashboard</h1>
-          <p className="text-sm text-slate-500">Manage queue and call guests into studio</p>
+          <h2 className="text-2xl font-bold text-slate-100">Photographer Admin Console</h2>
+          <p className="text-slate-400 text-sm">Manage queue flow and call next customer in real-time.</p>
         </div>
         <button
-          onClick={callNext}
-          className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition flex items-center space-x-2 text-lg"
+          onClick={handleCallNext}
+          disabled={loading || waitingList.length === 0}
+          className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold px-6 py-3 rounded-xl shadow-lg transition text-base cursor-pointer"
         >
-          <Play className="w-5 h-5 fill-current" />
-          <span>Call Next Guest</span>
+          {loading ? 'Processing...' : '📢 CALL NEXT CUSTOMER'}
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Currently Shooting Panel */}
-        <div className="md:col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-slate-100 flex flex-col justify-between">
-          <div>
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">In Studio Now</h2>
-            {currentGuest ? (
-              <div className="text-center py-4">
-                <span className="text-4xl font-black text-indigo-600">{currentGuest.id}</span>
-                <p className="text-xl font-bold text-slate-800 mt-2">{currentGuest.name}</p>
-                <p className="text-sm text-slate-500">{currentGuest.phone}</p>
-                <span className="inline-block mt-3 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-semibold">
-                  Party of {currentGuest.partySize}
-                </span>
+      {/* Currently In Shoot Studio Section */}
+      <div className="bg-slate-800 border border-amber-500/40 rounded-2xl p-6 shadow-md">
+        <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-3">Currently In Shoot Studio</h3>
+        {activeCustomer ? (
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="text-3xl font-black text-slate-100">#{activeCustomer.id} - {activeCustomer.name}</div>
+              <div className="text-sm text-slate-400 mt-1">
+                Group: {activeCustomer.groupSize} person(s) | Phone: {activeCustomer.phone || 'N/A'} | Joined: {activeCustomer.joinedAt || 'Recently'}
               </div>
-            ) : (
-              <div className="text-center py-8 text-slate-400">
-                <p>No active session</p>
-              </div>
-            )}
+            </div>
+            <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold px-4 py-1.5 rounded-full text-sm">
+              In Progress
+            </span>
           </div>
-          {currentGuest && (
-            <button
-              onClick={() => markCompleted(currentGuest.id)}
-              className="w-full py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-semibold rounded-xl text-sm transition flex items-center justify-center space-x-2"
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Finish Session</span>
-            </button>
-          )}
-        </div>
+        ) : (
+          <p className="text-slate-500 italic">No customer is currently in shoot studio.</p>
+        )}
+      </div>
 
-        {/* Queue List Panel */}
-        <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Waiting List ({queue.filter(q => q.status === 'waiting').length})</h2>
+      {/* Waiting Lineup Section */}
+      <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-6">
+        <h3 className="text-lg font-bold text-slate-200 mb-4">Waiting Lineup ({waitingList.length})</h3>
+        {waitingList.length === 0 ? (
+          <p className="text-slate-500">Queue is empty.</p>
+        ) : (
           <div className="space-y-3">
-            {queue.filter(q => q.status === 'waiting').map((guest) => (
-              <div key={guest.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border">
-                <div>
-                  <p className="font-bold text-slate-800">{guest.id} - {guest.name}</p>
-                  <p className="text-xs text-slate-500">{guest.phone} • {guest.partySize} person(s)</p>
+            {waitingList.map((item, index) => (
+              <div key={item.id} className="flex justify-between items-center bg-slate-900/60 p-4 rounded-xl border border-slate-700/50">
+                <div className="flex items-center space-x-4">
+                  <span className="text-amber-400 font-mono font-bold text-xl">#{item.id}</span>
+                  <div>
+                    <div className="font-semibold text-slate-200">{item.name}</div>
+                    <div className="text-xs text-slate-400">
+                      Party of {item.groupSize} {item.phone ? `• ${item.phone}` : ''} • Joined {item.joinedAt || 'Recently'}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-3">
+                  <span className="text-xs text-slate-400 bg-slate-800 px-2.5 py-1 rounded-md">
+                    Pos #{index + 1}
+                  </span>
                   <button
-                    title="Send SMS Notify"
-                    onClick={() => alert(`Notified ${guest.name} via SMS!`)}
-                    className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                    onClick={() => handleCancel(item.id)}
+                    className="text-xs text-red-400 hover:text-red-300 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-md cursor-pointer"
                   >
-                    <Bell className="w-4 h-4" />
-                  </button>
-                  <button
-                    title="Remove from queue"
-                    onClick={() => removeGuest(guest.id)}
-                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                  >
-                    <X className="w-4 h-4" />
+                    Remove
                   </button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
-    </main>
+    </div>
   );
 }
