@@ -1,75 +1,102 @@
 'use client';
-import { useState } from 'react';
-import { Clock, Users } from 'lucide-react';
 
-export default function StatusPage() {
-  const [queue, setQueue] = useState([
-    { id: 'T-1001', name: 'Samantha L.', partySize: 2, status: 'in-session', calledAt: '5:02 PM' },
-    { id: 'T-1002', name: 'Alex Wong', partySize: 1, status: 'waiting', joinedAt: '5:05 PM' },
-    { id: 'T-1003', name: 'David & Family', partySize: 4, status: 'waiting', joinedAt: '5:07 PM' },
-    { id: 'T-1004', name: 'Chris K.', partySize: 2, status: 'waiting', joinedAt: '5:10 PM' },
-  ]);
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-  const currentlyServing = queue.find(q => q.status === 'in-session');
-  const waitingList = queue.filter(q => q.status === 'waiting');
+function StatusContent() {
+  const searchParams = useSearchParams();
+  const ticketId = searchParams.get('id');
+  
+  const [waitlist, setWaitlist] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchWaitlist = async () => {
+    try {
+      const res = await fetch('/api/waitlist');
+      const data = await res.json();
+      setWaitlist(data.waitlist || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWaitlist();
+    const interval = setInterval(fetchWaitlist, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const myItem = waitlist.find((item) => item.id === ticketId);
+  const waitingList = waitlist.filter((item) => item.status === 'waiting');
+  const myIndex = waitingList.findIndex((item) => item.id === ticketId);
+  const currentInService = waitlist.find((item) => item.status === 'in-service');
+
+  if (loading) {
+    return <div className="text-center py-20 text-slate-400">Loading queue status...</div>;
+  }
+
+  if (!myItem) {
+    return (
+      <div className="text-center py-16 space-y-4">
+        <p className="text-red-400">Ticket not found or finished.</p>
+        <a href="/" className="inline-block bg-slate-800 text-slate-200 px-4 py-2 rounded-lg">Return to Join Page</a>
+      </div>
+    );
+  }
 
   return (
-    <main className="max-w-2xl mx-auto p-4 min-h-screen">
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-100 space-y-6">
-        <header className="border-b pb-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Live Shoot Status</h1>
-            <p className="text-xs text-slate-500">Real-time Waitlist Updates</p>
-          </div>
-          <span className="px-3 py-1 bg-green-100 text-green-700 font-semibold text-xs rounded-full animate-pulse">
-            ● Live Updates
-          </span>
-        </header>
+    <div className="max-w-lg mx-auto space-y-6 py-4">
+      {myItem.status === 'in-service' ? (
+        <div className="bg-emerald-500/20 border-2 border-emerald-500 rounded-2xl p-6 text-center animate-pulse">
+          <span className="text-4xl mb-2 block">🔔</span>
+          <h2 className="text-2xl font-black text-emerald-400">IT'S YOUR TURN!</h2>
+          <p className="text-slate-200 mt-1">Please head over to the photographer now.</p>
+        </div>
+      ) : myItem.status === 'completed' ? (
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 text-center">
+          <h2 className="text-xl font-bold text-slate-300">Session Completed 🎉</h2>
+          <p className="text-slate-400 text-sm mt-1">Thank you for visiting!</p>
+        </div>
+      ) : (
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 text-center space-y-4 shadow-xl">
+          <div className="text-slate-400 text-xs font-semibold tracking-wide uppercase">Your Queue Ticket</div>
+          <div className="text-6xl font-black text-amber-400 font-mono">#{myItem.id}</div>
+          <div className="text-slate-200 font-medium">{myItem.name}</div>
 
-        {/* Current Active Shoot */}
-        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-6 text-white shadow-md">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Currently In Studio</span>
-            <span className="text-xs bg-white/20 px-2 py-0.5 rounded">Active</span>
-          </div>
-          {currentlyServing ? (
-            <div>
-              <p className="text-3xl font-extrabold">{currentlyServing.id}</p>
-              <p className="text-lg font-medium opacity-90">{currentlyServing.name} ({currentlyServing.partySize} guests)</p>
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700/60">
+            <div className="bg-slate-900/60 p-3 rounded-xl">
+              <div className="text-xs text-slate-400">People Ahead</div>
+              <div className="text-2xl font-bold text-slate-100">{myIndex !== -1 ? myIndex : 0}</div>
             </div>
-          ) : (
-            <p className="text-lg font-medium opacity-80">Studio Ready - Awaiting Next Guest</p>
-          )}
-        </div>
-
-        {/* Queue List */}
-        <div>
-          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Up Next in Line ({waitingList.length})</h2>
-          <div className="space-y-3">
-            {waitingList.map((item, index) => (
-              <div key={item.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="flex items-center space-x-4">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-sm">
-                    #{index + 1}
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-800">{item.id} - {item.name}</p>
-                    <p className="text-xs text-slate-500 flex items-center gap-2">
-                      <span className="flex items-center gap-1"><Users className="w-3 h-3"/> {item.partySize}</span>
-                      <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {item.joinedAt}</span>
-                    </p>
-                  </div>
-                </div>
-                {index === 0 && (
-                  <span className="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
-                    Next Up!
-                  </span>
-                )}
-              </div>
-            ))}
+            <div className="bg-slate-900/60 p-3 rounded-xl">
+              <div className="text-xs text-slate-400">Est. Wait</div>
+              <div className="text-2xl font-bold text-slate-100">~{(myIndex !== -1 ? myIndex : 0) * 10} min</div>
+            </div>
           </div>
         </div>
+      )}
+
+      <div className="bg-slate-800/50 border border-slate-700/60 rounded-xl p-4 flex justify-between items-center">
+        <div>
+          <span className="text-xs text-slate-400 block">Currently Shooting</span>
+          <span className="font-semibold text-amber-300">
+            {currentInService ? `#${currentInService.id} - ${currentInService.name}` : 'None'}
+          </span>
+        </div>
+        <span className="px-2.5 py-1 text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full font-medium">
+          Now Active
+        </span>
       </div>
-    </main>
+    </div>
+  );
+}
+
+export default function StatusPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-20 text-slate-400">Loading...</div>}>
+      <StatusContent />
+    </Suspense>
   );
 }
